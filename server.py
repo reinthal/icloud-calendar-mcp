@@ -7,7 +7,7 @@ from typing import Optional
 import caldav
 import pytz
 from fastmcp import FastMCP
-from icalendar import Calendar, Event
+from icalendar import Calendar, Event, vRecur
 
 mcp = FastMCP(
     "iCloud Calendar",
@@ -50,6 +50,7 @@ def _event_to_dict(event: caldav.CalendarObjectResource) -> dict:
         if component.name == "VEVENT":
             dtstart = component.get("dtstart")
             dtend = component.get("dtend")
+            rrule = component.get("rrule")
             return {
                 "uid": str(component.get("uid", "")),
                 "summary": str(component.get("summary", "")),
@@ -58,6 +59,7 @@ def _event_to_dict(event: caldav.CalendarObjectResource) -> dict:
                 "start": dtstart.dt.isoformat() if dtstart else None,
                 "end": dtend.dt.isoformat() if dtend else None,
                 "status": str(component.get("status", "")),
+                "rrule": rrule.to_ical().decode() if rrule else None,
             }
     return {}
 
@@ -184,6 +186,7 @@ def create_event(
     calendar_name: str = DEFAULT_CALENDAR,
     description: str = "",
     location: str = "",
+    rrule: Optional[str] = None,
 ) -> dict:
     """Create a new calendar event in an iCloud calendar.
 
@@ -194,6 +197,9 @@ def create_event(
         calendar_name: Name of the iCloud calendar.
         description: Optional event description.
         location: Optional event location.
+        rrule: Optional iCalendar RRULE string for recurring events
+               (e.g. 'FREQ=WEEKLY;BYDAY=MO,WE,FR' or 'FREQ=DAILY;COUNT=5'
+               or 'FREQ=MONTHLY;UNTIL=20261231T235959Z').
 
     Returns:
         The created event as a dict with its assigned UID.
@@ -218,6 +224,8 @@ def create_event(
         event.add("description", description)
     if location:
         event.add("location", location)
+    if rrule:
+        event.add("rrule", vRecur.from_ical(rrule))
     event.add("status", "CONFIRMED")
 
     cal.add_component(event)
@@ -235,6 +243,7 @@ def create_event(
         "description": description,
         "location": location,
         "status": "CONFIRMED",
+        "rrule": rrule,
     }
 
 
