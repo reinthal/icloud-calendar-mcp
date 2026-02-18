@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"],
+      "env": {
+        "CONTEXT7_API_KEY": "${CONTEXT7_API_KEY}"
+      }
+    },
+    "icloud-calendar": {
+      "command": "uv",
+      "args": ["run", "fastmcp", "run", "server.py"],
+      "env": {
+        "ICLOUD_USERNAME": "${ICLOUD_USERNAME}",
+        "ICLOUD_PASSWORD": "${ICLOUD_PASSWORD}",
+        "ICLOUD_CALENDAR": "${ICLOUD_CALENDAR}"
+      }
+    }
+  }
+}

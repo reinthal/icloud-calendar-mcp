@@ -34,8 +34,7 @@
   '';
   scripts.import.exec = ''
     echo
-    echo "$(date): IMPORTING $1"
-    exec-from-repo-root python3 main.py $1
+    exec-from-repo-root python3 main.py $@
     echo
   '';
 
