@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 from datetime import datetime, timedelta
@@ -17,6 +18,11 @@ ICLOUD_CALDAV_URL = "https://caldav.icloud.com/"
 DEFAULT_CALENDAR = os.getenv("ICLOUD_CALENDAR", "Alex Plugg")
 
 
+def _get_calendar_name(calendar: caldav.Calendar) -> str:
+    props = calendar.get_properties([caldav.dav.DisplayName()])
+    return props.get("{DAV:}displayname", "")
+
+
 def _get_client() -> caldav.DAVClient:
     username = os.getenv("ICLOUD_USERNAME")
     password = os.getenv("ICLOUD_PASSWORD")
@@ -28,15 +34,11 @@ def _get_client() -> caldav.DAVClient:
 
 
 def _find_calendar(principal: caldav.Principal, calendar_name: str) -> caldav.Calendar:
-    for cal in principal.calendars():
-        props = cal.get_properties([caldav.dav.DisplayName()])
-        name = props.get("{DAV:}displayname", "")
-        if name == calendar_name:
+    all_cals = principal.calendars()
+    for cal in all_cals:
+        if _get_calendar_name(cal) == calendar_name:
             return cal
-    available = [
-        cal.get_properties([caldav.dav.DisplayName()]).get("{DAV:}displayname", "?")
-        for cal in principal.calendars()
-    ]
+    available = [_get_calendar_name(cal) for cal in all_cals]
     raise ValueError(
         f"Calendar '{calendar_name}' not found. Available: {available}"
     )
@@ -60,16 +62,49 @@ def _event_to_dict(event: caldav.CalendarObjectResource) -> dict:
     return {}
 
 
+@mcp.resource("calendars://list")
+def calendars_resource() -> str:
+    """List all available iCloud calendars as a resource.
+
+    Returns a JSON array of objects with 'name' and 'url' for each calendar.
+    Exposed as a resource so clients can discover available calendars on connect
+    without explicitly invoking a tool.
+    """
+    client = _get_client()
+    principal = client.principal()
+    result = [
+        {"name": _get_calendar_name(cal), "url": str(cal.url)}
+        for cal in principal.calendars()
+    ]
+    return json.dumps(result)
+
+
+@mcp.tool
+def list_calendars() -> list[dict]:
+    """List all available iCloud calendars.
+
+    Returns:
+        A list of dicts with 'name' and 'url' for each calendar.
+    """
+    client = _get_client()
+    principal = client.principal()
+    result = []
+    for cal in principal.calendars():
+        name = _get_calendar_name(cal)
+        result.append({"name": name, "url": str(cal.url)})
+    return result
+
+
 @mcp.tool
 def list_events(
-    calendar_name: str = DEFAULT_CALENDAR,
+    calendar_name: Optional[str] = None,
     start: Optional[str] = None,
     end: Optional[str] = None,
 ) -> list[dict]:
     """List calendar events from an iCloud calendar.
 
     Args:
-        calendar_name: Name of the iCloud calendar (defaults to ICLOUD_CALENDAR env var).
+        calendar_name: Name of the iCloud calendar. Defaults to all calendars.
         start: ISO 8601 start datetime for filtering (e.g. '2026-01-01T00:00:00').
                Defaults to the beginning of the current month.
         end: ISO 8601 end datetime for filtering (e.g. '2026-01-31T23:59:59').
@@ -89,32 +124,56 @@ def list_events(
 
     client = _get_client()
     principal = client.principal()
-    calendar = _find_calendar(principal, calendar_name)
 
-    events = calendar.date_search(start=start_dt, end=end_dt, expand=True)
-    return [_event_to_dict(e) for e in events]
+    if calendar_name:
+        calendars = [_find_calendar(principal, calendar_name)]
+    else:
+        calendars = principal.calendars()
+
+    all_events = []
+    for cal in calendars:
+        cal_display_name = _get_calendar_name(cal)
+        try:
+            events = cal.date_search(start=start_dt, end=end_dt, expand=True)
+            for e in events:
+                event_dict = _event_to_dict(e)
+                if event_dict:
+                    event_dict["calendar"] = cal_display_name
+                    all_events.append(event_dict)
+        except Exception:
+            # Skip calendars that don't support VEVENT date search (e.g. reminders)
+            pass
+
+    return all_events
 
 
 @mcp.tool
-def get_event(uid: str, calendar_name: str = DEFAULT_CALENDAR) -> dict:
+def get_event(uid: str, calendar_name: Optional[str] = None) -> dict:
     """Get a single calendar event by its UID.
 
     Args:
         uid: The unique identifier of the event.
-        calendar_name: Name of the iCloud calendar.
+        calendar_name: Name of the iCloud calendar. Defaults to searching all calendars.
     """
     client = _get_client()
     principal = client.principal()
-    calendar = _find_calendar(principal, calendar_name)
 
-    events = calendar.events()
-    for event in events:
-        cal = Calendar.from_ical(event.data)
-        for component in cal.walk():
-            if component.name == "VEVENT" and str(component.get("uid", "")) == uid:
-                return _event_to_dict(event)
+    if calendar_name:
+        calendars = [_find_calendar(principal, calendar_name)]
+    else:
+        calendars = principal.calendars()
 
-    raise ValueError(f"Event with UID '{uid}' not found in calendar '{calendar_name}'")
+    for cal in calendars:
+        try:
+            for event in cal.events():
+                parsed = Calendar.from_ical(event.data)
+                for component in parsed.walk():
+                    if component.name == "VEVENT" and str(component.get("uid", "")) == uid:
+                        return _event_to_dict(event)
+        except Exception:
+            pass
+
+    raise ValueError(f"Event with UID '{uid}' not found")
 
 
 @mcp.tool
