@@ -1,5 +1,6 @@
 import json
 import os
+import urllib.request
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
@@ -79,6 +80,23 @@ def calendars_resource() -> str:
         for cal in principal.calendars()
     ]
     return json.dumps(result)
+
+
+@mcp.resource("timezone://current")
+def timezone_resource() -> str:
+    """Get the current user's timezone based on their public IP address.
+
+    Returns a JSON object with ip, timezone, utc_offset, country, and city.
+    """
+    with urllib.request.urlopen("https://ipapi.co/json/") as resp:
+        data = json.loads(resp.read())
+    return json.dumps({
+        "ip": data.get("ip"),
+        "timezone": data.get("timezone"),
+        "utc_offset": data.get("utc_offset"),
+        "country": data.get("country_name"),
+        "city": data.get("city"),
+    })
 
 
 @mcp.tool
@@ -204,9 +222,12 @@ def create_event(
     Returns:
         The created event as a dict with its assigned UID.
     """
-    tz = pytz.UTC
-    start_dt = datetime.fromisoformat(start).replace(tzinfo=tz)
-    end_dt = datetime.fromisoformat(end).replace(tzinfo=tz)
+    start_dt = datetime.fromisoformat(start)
+    if start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=pytz.UTC)
+    end_dt = datetime.fromisoformat(end)
+    if end_dt.tzinfo is None:
+        end_dt = end_dt.replace(tzinfo=pytz.UTC)
 
     event_uid = str(uuid.uuid4())
 
@@ -219,7 +240,7 @@ def create_event(
     event.add("summary", summary)
     event.add("dtstart", start_dt)
     event.add("dtend", end_dt)
-    event.add("dtstamp", datetime.now(tz))
+    event.add("dtstamp", datetime.now(pytz.UTC))
     if description:
         event.add("description", description)
     if location:
@@ -271,7 +292,6 @@ def update_event(
     Returns:
         The updated event as a dict.
     """
-    tz = pytz.UTC
     client = _get_client()
     principal = client.principal()
     calendar = _find_calendar(principal, calendar_name)
@@ -309,12 +329,15 @@ def update_event(
     new_summary = summary if summary is not None else existing["summary"]
     new_description = description if description is not None else existing["description"]
     new_location = location if location is not None else existing["location"]
-    new_start = (
-        datetime.fromisoformat(start).replace(tzinfo=tz) if start else existing["start"]
-    )
-    new_end = (
-        datetime.fromisoformat(end).replace(tzinfo=tz) if end else existing["end"]
-    )
+
+    def _parse_dt(s: str) -> datetime:
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=pytz.UTC)
+        return dt
+
+    new_start = _parse_dt(start) if start else existing["start"]
+    new_end = _parse_dt(end) if end else existing["end"]
 
     # Delete old event and create updated one
     target_event.delete()
@@ -328,7 +351,7 @@ def update_event(
     new_event.add("summary", new_summary)
     new_event.add("dtstart", new_start)
     new_event.add("dtend", new_end)
-    new_event.add("dtstamp", datetime.now(tz))
+    new_event.add("dtstamp", datetime.now(pytz.UTC))
     new_event.add("sequence", 1)
     if new_description:
         new_event.add("description", new_description)
