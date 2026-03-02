@@ -13,9 +13,8 @@ The local development server is the one being actively developed and tested in t
 
 ## Timezone Handling
 
-The server automatically detects the server's timezone based on its IP address when creating or updating events:
+The server uses Europe/Paris timezone (CET/CEST) for all events:
 
-1. **Timezone Lookup**: Uses ipapi.co to determine timezone from the server's public IP
-2. **Fallback**: Falls back to UTC if timezone detection fails
+- **Hardcoded Timezone**: All events use Europe/Paris which automatically handles CET (winter, UTC+1) and CEST (summer, UTC+2) transitions
 
-When a datetime string is provided without timezone information (e.g., `2026-03-02T10:00:00`), the server will localize it to the detected server timezone. For timezone-aware operations, provide ISO 8601 datetime strings with timezone information (e.g., `2026-03-02T10:00:00-05:00`).
+When a datetime string is provided without timezone information (e.g., `2026-03-02T10:00:00`), the server will localize it to Europe/Paris timezone. For timezone-aware operations, you can provide ISO 8601 datetime strings with timezone information (e.g., `2026-03-02T10:00:00-05:00`).

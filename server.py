@@ -1,6 +1,5 @@
 import json
 import os
-import urllib.request
 import uuid
 from datetime import datetime, timedelta
 from typing import Optional
@@ -46,16 +45,9 @@ def _find_calendar(principal: caldav.Principal, calendar_name: str) -> caldav.Ca
 
 
 def _get_user_timezone() -> pytz.tzinfo:
-    """Get the server's timezone based on its public IP address."""
-    try:
-        # Use server's IP to determine timezone
-        with urllib.request.urlopen("https://ipapi.co/json/") as resp:
-            data = json.loads(resp.read())
-        tz_name = data.get("timezone", "UTC")
-        return pytz.timezone(tz_name)
-    except Exception:
-        # Fall back to UTC if timezone detection fails
-        return pytz.UTC
+    """Get the timezone for events (hardcoded to Europe/Paris for CET/CEST)."""
+    # Hardcoded to Europe/Paris which automatically handles CET (winter) and CEST (summer)
+    return pytz.timezone("Europe/Paris")
 
 
 def _event_to_dict(event: caldav.CalendarObjectResource) -> dict:
@@ -93,23 +85,6 @@ def calendars_resource() -> str:
         for cal in principal.calendars()
     ]
     return json.dumps(result)
-
-
-@mcp.resource("timezone://current")
-def timezone_resource() -> str:
-    """Get the current user's timezone based on their public IP address.
-
-    Returns a JSON object with ip, timezone, utc_offset, country, and city.
-    """
-    with urllib.request.urlopen("https://ipapi.co/json/") as resp:
-        data = json.loads(resp.read())
-    return json.dumps({
-        "ip": data.get("ip"),
-        "timezone": data.get("timezone"),
-        "utc_offset": data.get("utc_offset"),
-        "country": data.get("country_name"),
-        "city": data.get("city"),
-    })
 
 
 @mcp.tool
