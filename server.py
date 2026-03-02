@@ -8,6 +8,8 @@ from typing import Optional
 import caldav
 import pytz
 from fastmcp import FastMCP
+from fastmcp.dependencies import CurrentContext
+from fastmcp.server.context import Context
 from icalendar import Calendar, Event, vRecur
 
 mcp = FastMCP(
@@ -43,6 +45,42 @@ def _find_calendar(principal: caldav.Principal, calendar_name: str) -> caldav.Ca
     raise ValueError(
         f"Calendar '{calendar_name}' not found. Available: {available}"
     )
+
+
+def _get_user_timezone(ctx: Optional[Context] = None) -> pytz.tzinfo:
+    """Get the user's timezone based on their public IP address from request context."""
+    try:
+        client_ip = None
+
+        # Try to get client IP from request context
+        if ctx and hasattr(ctx, 'request_context') and ctx.request_context:
+            request = getattr(ctx.request_context, 'request', None)
+            if request and hasattr(request, 'headers'):
+                # Check common headers for client IP
+                headers = request.headers
+                client_ip = (
+                    headers.get('X-Forwarded-For', '').split(',')[0].strip() or
+                    headers.get('X-Real-IP') or
+                    headers.get('CF-Connecting-IP') or  # Cloudflare
+                    None
+                )
+
+        # If we have a client IP, use it to get timezone
+        if client_ip:
+            url = f"https://ipapi.co/{client_ip}/json/"
+            with urllib.request.urlopen(url) as resp:
+                data = json.loads(resp.read())
+            tz_name = data.get("timezone", "UTC")
+            return pytz.timezone(tz_name)
+        else:
+            # Fall back to server's own IP if no client IP available
+            with urllib.request.urlopen("https://ipapi.co/json/") as resp:
+                data = json.loads(resp.read())
+            tz_name = data.get("timezone", "UTC")
+            return pytz.timezone(tz_name)
+    except Exception:
+        # Fall back to UTC if timezone detection fails
+        return pytz.UTC
 
 
 def _event_to_dict(event: caldav.CalendarObjectResource) -> dict:
@@ -205,6 +243,7 @@ def create_event(
     description: str = "",
     location: str = "",
     rrule: Optional[str] = None,
+    ctx: Context = CurrentContext,
 ) -> dict:
     """Create a new calendar event in an iCloud calendar.
 
@@ -222,12 +261,15 @@ def create_event(
     Returns:
         The created event as a dict with its assigned UID.
     """
+    # Get user's timezone from client IP in request context
+    user_tz = _get_user_timezone(ctx)
+
     start_dt = datetime.fromisoformat(start)
     if start_dt.tzinfo is None:
-        start_dt = start_dt.replace(tzinfo=pytz.UTC)
+        start_dt = user_tz.localize(start_dt)
     end_dt = datetime.fromisoformat(end)
     if end_dt.tzinfo is None:
-        end_dt = end_dt.replace(tzinfo=pytz.UTC)
+        end_dt = user_tz.localize(end_dt)
 
     event_uid = str(uuid.uuid4())
 
@@ -277,6 +319,7 @@ def update_event(
     description: Optional[str] = None,
     location: Optional[str] = None,
     calendar_name: str = DEFAULT_CALENDAR,
+    ctx: Context = CurrentContext,
 ) -> dict:
     """Update an existing calendar event by UID. Only provided fields are changed.
 
@@ -331,9 +374,11 @@ def update_event(
     new_location = location if location is not None else existing["location"]
 
     def _parse_dt(s: str) -> datetime:
+        # Get user's timezone from client IP in request context
+        user_tz = _get_user_timezone(ctx)
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=pytz.UTC)
+            dt = user_tz.localize(dt)
         return dt
 
     new_start = _parse_dt(start) if start else existing["start"]
