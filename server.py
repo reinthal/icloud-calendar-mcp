@@ -8,8 +8,6 @@ from typing import Optional
 import caldav
 import pytz
 from fastmcp import FastMCP
-from fastmcp.dependencies import CurrentContext
-from fastmcp.server.context import Context
 from icalendar import Calendar, Event, vRecur
 
 mcp = FastMCP(
@@ -47,37 +45,14 @@ def _find_calendar(principal: caldav.Principal, calendar_name: str) -> caldav.Ca
     )
 
 
-def _get_user_timezone(ctx: Optional[Context] = None) -> pytz.tzinfo:
-    """Get the user's timezone based on their public IP address from request context."""
+def _get_user_timezone() -> pytz.tzinfo:
+    """Get the server's timezone based on its public IP address."""
     try:
-        client_ip = None
-
-        # Try to get client IP from request context
-        if ctx and hasattr(ctx, 'request_context') and ctx.request_context:
-            request = getattr(ctx.request_context, 'request', None)
-            if request and hasattr(request, 'headers'):
-                # Check common headers for client IP
-                headers = request.headers
-                client_ip = (
-                    headers.get('X-Forwarded-For', '').split(',')[0].strip() or
-                    headers.get('X-Real-IP') or
-                    headers.get('CF-Connecting-IP') or  # Cloudflare
-                    None
-                )
-
-        # If we have a client IP, use it to get timezone
-        if client_ip:
-            url = f"https://ipapi.co/{client_ip}/json/"
-            with urllib.request.urlopen(url) as resp:
-                data = json.loads(resp.read())
-            tz_name = data.get("timezone", "UTC")
-            return pytz.timezone(tz_name)
-        else:
-            # Fall back to server's own IP if no client IP available
-            with urllib.request.urlopen("https://ipapi.co/json/") as resp:
-                data = json.loads(resp.read())
-            tz_name = data.get("timezone", "UTC")
-            return pytz.timezone(tz_name)
+        # Use server's IP to determine timezone
+        with urllib.request.urlopen("https://ipapi.co/json/") as resp:
+            data = json.loads(resp.read())
+        tz_name = data.get("timezone", "UTC")
+        return pytz.timezone(tz_name)
     except Exception:
         # Fall back to UTC if timezone detection fails
         return pytz.UTC
@@ -243,7 +218,6 @@ def create_event(
     description: str = "",
     location: str = "",
     rrule: Optional[str] = None,
-    ctx: Context = CurrentContext,
 ) -> dict:
     """Create a new calendar event in an iCloud calendar.
 
@@ -261,8 +235,8 @@ def create_event(
     Returns:
         The created event as a dict with its assigned UID.
     """
-    # Get user's timezone from client IP in request context
-    user_tz = _get_user_timezone(ctx)
+    # Get server's timezone
+    user_tz = _get_user_timezone()
 
     start_dt = datetime.fromisoformat(start)
     if start_dt.tzinfo is None:
@@ -319,7 +293,6 @@ def update_event(
     description: Optional[str] = None,
     location: Optional[str] = None,
     calendar_name: str = DEFAULT_CALENDAR,
-    ctx: Context = CurrentContext,
 ) -> dict:
     """Update an existing calendar event by UID. Only provided fields are changed.
 
@@ -374,8 +347,8 @@ def update_event(
     new_location = location if location is not None else existing["location"]
 
     def _parse_dt(s: str) -> datetime:
-        # Get user's timezone from client IP in request context
-        user_tz = _get_user_timezone(ctx)
+        # Get server's timezone
+        user_tz = _get_user_timezone()
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
             dt = user_tz.localize(dt)

@@ -13,10 +13,9 @@ The local development server is the one being actively developed and tested in t
 
 ## Timezone Handling
 
-The server automatically detects the client's timezone based on their IP address when creating or updating events:
+The server automatically detects the server's timezone based on its IP address when creating or updating events:
 
-1. **Client IP Detection**: Extracts the client IP from request headers (`X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`)
-2. **Timezone Lookup**: Uses ipapi.co to determine timezone from the client IP
-3. **Fallback**: Falls back to server timezone if client IP is unavailable, then to UTC if all else fails
+1. **Timezone Lookup**: Uses ipapi.co to determine timezone from the server's public IP
+2. **Fallback**: Falls back to UTC if timezone detection fails
 
-When a datetime string is provided without timezone information (e.g., `2026-03-02T10:00:00`), the server will localize it to the client's detected timezone.
+When a datetime string is provided without timezone information (e.g., `2026-03-02T10:00:00`), the server will localize it to the detected server timezone. For timezone-aware operations, provide ISO 8601 datetime strings with timezone information (e.g., `2026-03-02T10:00:00-05:00`).
