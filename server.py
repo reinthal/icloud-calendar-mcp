@@ -23,6 +23,105 @@ def _get_calendar_name(calendar: caldav.Calendar) -> str:
     return props.get("{DAV:}displayname", "")
 
 
+def _get_calendar_metadata(calendar: caldav.Calendar) -> dict:
+    """Retrieve comprehensive metadata for a calendar using standard CalDAV properties.
+
+    Returns:
+        Dict with name, url, description, timezone, and supported_components.
+    """
+    from caldav.elements import dav, cdav
+    import xml.etree.ElementTree as ET
+
+    # Build a PROPFIND request for standard CalDAV properties only
+    propfind_xml = '''<?xml version="1.0" encoding="utf-8" ?>
+    <D:propfind xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+        <D:prop>
+            <D:displayname />
+            <C:calendar-description />
+            <C:calendar-timezone />
+            <C:supported-calendar-component-set />
+        </D:prop>
+    </D:propfind>'''
+
+    try:
+        # Make direct PROPFIND request
+        response = calendar.client.propfind(
+            calendar.url,
+            props=propfind_xml,
+            depth=0
+        )
+
+        # Parse the XML response
+        tree = response.tree
+        ns = {
+            'D': 'DAV:',
+            'C': 'urn:ietf:params:xml:ns:caldav'
+        }
+
+        # Extract properties
+        metadata = {
+            "name": "",
+            "url": str(calendar.url),
+            "description": "",
+            "timezone": "",
+            "supported_components": []
+        }
+
+        # Get displayname
+        displayname_elem = tree.find('.//D:displayname', ns)
+        if displayname_elem is not None and displayname_elem.text:
+            metadata["name"] = displayname_elem.text
+
+        # Get description
+        desc_elem = tree.find('.//C:calendar-description', ns)
+        if desc_elem is not None and desc_elem.text:
+            metadata["description"] = desc_elem.text
+
+        # Get timezone (usually contains full VTIMEZONE data)
+        tz_elem = tree.find('.//C:calendar-timezone', ns)
+        if tz_elem is not None and tz_elem.text:
+            # Extract just the timezone ID from the VTIMEZONE data
+            tz_text = tz_elem.text
+            if "TZID:" in tz_text:
+                for line in tz_text.split('\n'):
+                    if line.startswith('TZID:'):
+                        metadata["timezone"] = line.split(':', 1)[1].strip()
+                        break
+            else:
+                metadata["timezone"] = "UTC"
+
+        # Get supported components
+        comp_set = tree.find('.//C:supported-calendar-component-set', ns)
+        if comp_set is not None:
+            for comp in comp_set.findall('.//C:comp', ns):
+                comp_name = comp.get('name')
+                if comp_name:
+                    metadata["supported_components"].append(comp_name)
+
+    except Exception as e:
+        # Fallback to basic properties if advanced retrieval fails
+        try:
+            props = calendar.get_properties([dav.DisplayName()])
+            metadata = {
+                "name": props.get("{DAV:}displayname", ""),
+                "url": str(calendar.url),
+                "description": "",
+                "timezone": "",
+                "supported_components": []
+            }
+        except Exception:
+            # Last resort fallback
+            metadata = {
+                "name": "Unknown",
+                "url": str(calendar.url),
+                "description": "",
+                "timezone": "",
+                "supported_components": []
+            }
+
+    return metadata
+
+
 def _get_client() -> caldav.DAVClient:
     username = os.getenv("ICLOUD_USERNAME")
     password = os.getenv("ICLOUD_PASSWORD")
@@ -74,33 +173,88 @@ def _event_to_dict(event: caldav.CalendarObjectResource) -> dict:
 def calendars_resource() -> str:
     """List all available iCloud calendars as a resource.
 
-    Returns a JSON array of objects with 'name' and 'url' for each calendar.
+    Returns a JSON array of objects with comprehensive metadata for each calendar.
     Exposed as a resource so clients can discover available calendars on connect
     without explicitly invoking a tool.
     """
     client = _get_client()
     principal = client.principal()
-    result = [
-        {"name": _get_calendar_name(cal), "url": str(cal.url)}
-        for cal in principal.calendars()
-    ]
+    result = [_get_calendar_metadata(cal) for cal in principal.calendars()]
     return json.dumps(result)
+
+
+def _update_calendar_properties(calendar: caldav.Calendar, description: Optional[str] = None) -> dict:
+    """Update calendar properties using PROPPATCH.
+
+    Args:
+        calendar: The calendar object to update
+        description: New description for the calendar
+
+    Returns:
+        Dict with the updated properties
+    """
+    import xml.etree.ElementTree as ET
+
+    if description is None:
+        return _get_calendar_metadata(calendar)
+
+    # Build PROPPATCH XML request
+    proppatch_xml = f'''<?xml version="1.0" encoding="utf-8" ?>
+    <D:propertyupdate xmlns:D="DAV:" xmlns:C="urn:ietf:params:xml:ns:caldav">
+        <D:set>
+            <D:prop>
+                <C:calendar-description>{description}</C:calendar-description>
+            </D:prop>
+        </D:set>
+    </D:propertyupdate>'''
+
+    try:
+        # Send PROPPATCH request
+        response = calendar.client.proppatch(calendar.url, proppatch_xml)
+
+        # Return updated metadata
+        return _get_calendar_metadata(calendar)
+
+    except Exception as e:
+        raise ValueError(f"Failed to update calendar properties: {e}")
+
+
+@mcp.tool
+def update_calendar_metadata(
+    calendar_name: str,
+    description: Optional[str] = None
+) -> dict:
+    """Update metadata for a calendar.
+
+    Args:
+        calendar_name: Name of the iCloud calendar to update
+        description: New description for the calendar (optional)
+
+    Returns:
+        Dict with the updated calendar metadata
+    """
+    client = _get_client()
+    principal = client.principal()
+    calendar = _find_calendar(principal, calendar_name)
+
+    return _update_calendar_properties(calendar, description=description)
 
 
 @mcp.tool
 def list_calendars() -> list[dict]:
-    """List all available iCloud calendars.
+    """List all available iCloud calendars with comprehensive metadata.
 
     Returns:
-        A list of dicts with 'name' and 'url' for each calendar.
+        A list of dicts containing:
+        - name: Display name of the calendar
+        - url: CalDAV URL for the calendar
+        - description: Calendar description (if set)
+        - timezone: Calendar timezone information (extracted from VTIMEZONE data)
+        - supported_components: List of supported component types (VEVENT, VTODO, etc.)
     """
     client = _get_client()
     principal = client.principal()
-    result = []
-    for cal in principal.calendars():
-        name = _get_calendar_name(cal)
-        result.append({"name": name, "url": str(cal.url)})
-    return result
+    return [_get_calendar_metadata(cal) for cal in principal.calendars()]
 
 
 @mcp.tool
