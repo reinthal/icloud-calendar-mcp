@@ -20,8 +20,8 @@ from src.resources import get_calendars_resource, get_timezone_resource
 
 # Initialize MCP server
 mcp = FastMCP(
-    "Multi-Provider Calendar",
-    instructions="Manage iCloud and Protonmail calendar events via CalDAV. Supports listing, creating, updating, and deleting events.",
+    "iCloud Calendar",
+    instructions="Manage iCloud calendar events via CalDAV. Supports listing, creating, updating, and deleting events.",
 )
 
 # Register tools
@@ -37,7 +37,7 @@ mcp.tool(update_calendar_metadata)
 # Register resources
 @mcp.resource("calendars://list")
 def calendars_resource() -> str:
-    """List all available calendars from all providers as a resource.
+    """List all available iCloud calendars as a resource.
 
     Returns a JSON array of objects with comprehensive metadata for each calendar.
     Exposed as a resource so clients can discover available calendars on connect

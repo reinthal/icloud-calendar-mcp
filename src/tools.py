@@ -16,12 +16,12 @@ DEFAULT_CALENDAR = os.getenv("ICLOUD_CALENDAR", "Alex Plugg")
 
 
 def list_calendars() -> list[dict]:
-    """List all available calendars from all configured providers with comprehensive metadata.
+    """List all available iCloud calendars with comprehensive metadata.
 
     Returns:
         A list of dicts containing:
         - name: Display name with provider prefix
-        - provider: Provider identifier (icloud, protonmail, etc.)
+        - provider: Provider identifier (icloud)
         - url: CalDAV URL for the calendar
         - description: Calendar description (if set)
         - timezone: Calendar timezone information (extracted from VTIMEZONE data)
@@ -83,7 +83,7 @@ def list_events(
 
     Args:
         calendar_name: Full calendar name with provider prefix (e.g. '[iCloud] Work').
-                      Defaults to all calendars from all providers.
+                      Defaults to all iCloud calendars.
         start: ISO 8601 start datetime. Defaults to start of current month.
         end: ISO 8601 end datetime. Defaults to 30 days after start.
 
@@ -154,7 +154,7 @@ def get_event(uid: str, calendar_name: Optional[str] = None) -> dict:
     Args:
         uid: The unique identifier of the event.
         calendar_name: Optional full calendar name with provider prefix.
-                      Defaults to searching all calendars from all providers.
+                      Defaults to searching all iCloud calendars.
 
     Returns:
         Event dict with 'calendar' and 'provider' fields.
@@ -211,13 +211,13 @@ def create_event(
     location: str = "",
     rrule: Optional[str] = None,
 ) -> dict:
-    """Create a new calendar event in any calendar (iCloud or Protonmail).
+    """Create a new calendar event in an iCloud calendar.
 
     Args:
         summary: Title of the event.
         start: ISO 8601 start datetime.
         end: ISO 8601 end datetime.
-        calendar_name: Full calendar name with provider prefix (e.g. '[Protonmail] Personal').
+        calendar_name: Full calendar name with provider prefix (e.g. '[iCloud] Work').
                       Defaults to DEFAULT_CALENDAR for backward compatibility.
         description: Optional event description.
         location: Optional event location.

@@ -7,7 +7,7 @@ from .utils import get_calendar_metadata
 
 
 def get_calendars_resource() -> str:
-    """List all available calendars from all providers as a resource.
+    """List all available iCloud calendars as a resource.
 
     Returns a JSON array of objects with comprehensive metadata for each calendar.
     Exposed as a resource so clients can discover available calendars on connect
@@ -16,7 +16,7 @@ def get_calendars_resource() -> str:
     Returns:
         JSON string containing array of calendar objects with:
         - name: Display name with provider prefix
-        - provider: Provider identifier
+        - provider: Provider identifier (icloud)
         - url: CalDAV URL
         - description: Calendar description (if set)
         - timezone: Calendar timezone information

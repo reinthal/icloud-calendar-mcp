@@ -12,8 +12,8 @@ class CalDAVProvider:
         """Initialize provider.
 
         Args:
-            name: Internal provider identifier (e.g., "icloud", "protonmail")
-            display_name: Human-readable name for display (e.g., "iCloud", "Protonmail")
+            name: Internal provider identifier (e.g., "icloud")
+            display_name: Human-readable name for display (e.g., "iCloud")
         """
         self.name = name
         self.display_name = display_name
@@ -97,41 +97,6 @@ class ICloudProvider(CalDAVProvider):
         return bool(os.getenv("ICLOUD_USERNAME") and os.getenv("ICLOUD_PASSWORD"))
 
 
-class ProtonmailProvider(CalDAVProvider):
-    """Protonmail CalDAV provider implementation."""
-
-    def __init__(self):
-        """Initialize Protonmail provider with CalDAV URL."""
-        super().__init__("protonmail", "Protonmail")
-        self.url = os.getenv("PROTONMAIL_CALDAV_URL", "https://calendar.protonmail.com/dav/")
-
-    def get_client(self) -> caldav.DAVClient:
-        """Create Protonmail CalDAV client.
-
-        Uses SMTP credentials for CalDAV authentication.
-
-        Returns:
-            Configured CalDAV client for Protonmail
-
-        Raises:
-            ValueError: If credentials are not configured
-        """
-        username = os.getenv("PROTONMAIL_SMTP_USERNAME")
-        password = os.getenv("PROTONMAIL_SMTP_TOKEN")
-        if not username or not password:
-            raise ValueError("PROTONMAIL_SMTP_USERNAME and PROTONMAIL_SMTP_TOKEN must be set")
-        return caldav.DAVClient(url=self.url, username=username, password=password)
-
-    def is_enabled(self) -> bool:
-        """Check if Protonmail credentials are configured.
-
-        Returns:
-            True if both username and password are set
-        """
-        return bool(os.getenv("PROTONMAIL_SMTP_USERNAME") and
-                   os.getenv("PROTONMAIL_SMTP_TOKEN"))
-
-
 class ProviderRegistry:
     """Manages all configured CalDAV providers."""
 
@@ -139,7 +104,6 @@ class ProviderRegistry:
         """Initialize registry with all available providers."""
         self.providers = {
             "icloud": ICloudProvider(),
-            "protonmail": ProtonmailProvider(),
         }
 
     def get_enabled_providers(self) -> list[CalDAVProvider]:
@@ -164,7 +128,6 @@ class ProviderRegistry:
 
         Examples:
             "[iCloud] Work" -> (ICloudProvider, "Work")
-            "[Protonmail] Personal" -> (ProtonmailProvider, "Personal")
             "Work" -> (ICloudProvider, "Work")  # Backward compatibility
         """
         # Check for explicit provider prefix
