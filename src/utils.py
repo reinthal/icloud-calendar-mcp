@@ -3,12 +3,13 @@
 from typing import Optional
 import xml.etree.ElementTree as ET
 import caldav
+from caldav.elements import dav
 from icalendar import Calendar
 
 
 def get_calendar_name(calendar: caldav.Calendar) -> str:
     """Extract display name from CalDAV calendar."""
-    props = calendar.get_properties([caldav.dav.DisplayName()])
+    props = calendar.get_properties([dav.DisplayName()])
     return props.get("{DAV:}displayname", "")
 
 
