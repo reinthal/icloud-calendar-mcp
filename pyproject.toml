@@ -1,14 +1,24 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [project]
-name = "ics-icloud-import"
-version = "0.1.0"
-description = "Add your description here"
+name = "icloud-calendar-mcp"
+version = "1.0.0"
+description = "iCloud Calendar MCP Server and CLI - Manage your iCloud calendars via CalDAV"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "caldav>=2.0.1",
     "fastmcp==2.12.3",
     "icalendar>=6.0.0",
-    "openpyxl>=3.1.5",
     "pytz>=2024.2",
-    "xlsxwriter>=3.2.9",
+    "click>=8.1.0",
+    "rich>=13.0.0",
 ]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[project.scripts]
+icloud-cal = "src.cli:cli"

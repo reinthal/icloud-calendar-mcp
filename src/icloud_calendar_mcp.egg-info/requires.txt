@@ -1,0 +1,6 @@
+caldav>=2.0.1
+fastmcp==2.12.3
+icalendar>=6.0.0
+pytz>=2024.2
+click>=8.1.0
+rich>=13.0.0
