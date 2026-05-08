@@ -1,11 +1,15 @@
-# 100 % Vibes
+# Remote Icloud MCP Server
 
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![FastMCP](https://img.shields.io/badge/MCP-FastMCP-orange.svg)](https://github.com/jlowin/fastmcp)
 [![CalDAV](https://img.shields.io/badge/protocol-CalDAV-lightgrey.svg)](https://www.rfc-editor.org/rfc/rfc4791)
+Remote MCP server so Claude Code (or any MCP-compatible client) can manage calendar events directly you can deploy at https://horizon.prefect.io/.
 
-Takes an ICS file and imports it to an iCloud calendar. Also exposes an MCP server so Claude Code (or any MCP-compatible client) can manage calendar events directly.
+**Works with**
+- Claude Code / Claude Desktop / Claude.ai
+- ChatGpt
+- Anything that supports Oauth MCP servers
 
 ## Environment Variables
 
